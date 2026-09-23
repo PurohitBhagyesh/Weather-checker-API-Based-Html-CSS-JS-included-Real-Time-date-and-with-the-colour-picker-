@@ -103,6 +103,23 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 </div>
 
 <div class="container">
+<div class="sticky-section">
+  <div class="sticky-note-box">
+    <p>Sticky Notes</p>
+    <textarea id="noteInput" placeholder="Take a quick note..."></textarea>
+    <div class="color-picker-row">
+      <button class="color-pill yellow active" type="button" onclick="setNoteColor('yellow')" title="Yellow"></button>
+      <button class="color-pill pink" type="button" onclick="setNoteColor('pink')" title="Pink"></button>
+      <button class="color-pill blue" type="button" onclick="setNoteColor('blue')" title="Blue"></button>
+      <button class="color-pill green" type="button" onclick="setNoteColor('green')" title="Green"></button>
+    </div>
+    <button class="add-note-btn" type="button" onclick="saveNoteFromInput()">Add Note</button>
+    <button class="add-note-btn secondary" type="button" onclick="saveNotesToPdf()">Save to PDF</button>
+    <button class="add-note-btn secondary" type="button" onclick="clearNotes()">Clear All</button>
+  </div>
+  <div class="sticky-list" id="stickyList"></div>
+</div>
+
 <div class="card">
 
 <div class="color-ring-wrap">
@@ -114,7 +131,6 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 </div>
 
 <h3 style="font-size:18px;font-weight:700;margin:6px 0 4px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.18);">Choose Your Hometown Area</h3>
-<!-- you can add your hometown option in the select box -->
 
 <div class="controls">
 <select id="city" onchange="getWeather()">
@@ -156,9 +172,13 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// Add your WeatherAPI key below
+// Add your WeatherAPI key below or enter it when prompted
 const API_KEY="YOUR_API_KEY_HERE";
-<!-- you have to add your api key here -->
+
+function getApiKey(){
+  return localStorage.getItem("weather_api_key") || API_KEY;
+}
+
 const msgs=[
 "Perfect weather for today!",
 "Enjoy your day outdoors.",
@@ -170,14 +190,17 @@ function randomMsg(){
 return msgs[Math.floor(Math.random()*msgs.length)];
 }
 
-setInterval(()=>{
+function updateClock(){
 const now=new Date();
 document.getElementById("clock").innerText=now.toLocaleTimeString();
 document.getElementById("date").innerText=now.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
-},1000);
+}
+
+updateClock();
+setInterval(updateClock,1000);
 
 function escapeHtml(text){
-return text.replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+return text.replace(/[&<>'"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
 let selectedNoteColor='yellow';
@@ -195,6 +218,7 @@ if(input){
 
 function renderNotes(){
 const list=document.getElementById("stickyList");
+if(!list) return;
 const notes=JSON.parse(localStorage.getItem("weatherStickyNotes")||"[]");
 list.innerHTML=notes.length?notes.map((note)=>`
 <div class="sticky-item" data-color="${note.color||'yellow'}">
@@ -337,6 +361,7 @@ document.addEventListener('click',()=>{
 
 function clearNotes(){
 const list=document.getElementById("stickyList");
+if(!list) return;
 const items=list.querySelectorAll(".sticky-item");
 items.forEach((item,index)=>{
 item.classList.add("removing");
@@ -400,14 +425,60 @@ document.getElementById("message").innerHTML="<h3>"+randomMsg()+"</h3>";
 async function getWeather(){
 const city=document.getElementById("city").value;
 if(!city)return;
-const r=await fetch(`https://api.weatherapi.com/v1/current.json?key=${API_KEY}&q=${city}`);
-render(await r.json());
+const apiKey=getApiKey();
+if(!apiKey || apiKey==="YOUR_API_KEY_HERE"){
+  const userKey=prompt("Please enter your WeatherAPI key (from weatherapi.com):");
+  if(userKey && userKey.trim()){
+    localStorage.setItem("weather_api_key", userKey.trim());
+    return getWeather();
+  } else {
+    document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#d97706;font-weight:bold;">WeatherAPI key is required.</p></div>`;
+    return;
+  }
+}
+try {
+  const r=await fetch(`https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(city)}`);
+  const data=await r.json();
+  if(r.ok && data.location){
+    render(data);
+  } else {
+    document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${data.error?.message || "Failed to fetch weather data"}</p></div>`;
+  }
+} catch (err) {
+  document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">Network error. Please try again.</p></div>`;
+}
 }
 
 function currentLocation(){
+if(!navigator.geolocation){
+  alert("Geolocation is not supported by your browser");
+  return;
+}
+const apiKey=getApiKey();
+if(!apiKey || apiKey==="YOUR_API_KEY_HERE"){
+  const userKey=prompt("Please enter your WeatherAPI key (from weatherapi.com):");
+  if(userKey && userKey.trim()){
+    localStorage.setItem("weather_api_key", userKey.trim());
+    return currentLocation();
+  } else {
+    document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#d97706;font-weight:bold;">WeatherAPI key is required.</p></div>`;
+    return;
+  }
+}
 navigator.geolocation.getCurrentPosition(async p=>{
-const r=await fetch(`https://api.weatherapi.com/v1/current.json?key=${API_KEY}&q=${p.coords.latitude},${p.coords.longitude}`);
-render(await r.json());
+  try {
+    const r=await fetch(`https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${p.coords.latitude},${p.coords.longitude}`);
+    const data=await r.json();
+    if(r.ok && data.location){
+      render(data);
+    } else {
+      document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${data.error?.message || "Failed to fetch weather data"}</p></div>`;
+    }
+  } catch (err) {
+    document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">Network error. Please try again.</p></div>`;
+  }
+}, err => {
+  alert("Unable to retrieve location: " + err.message);
 });
 }
 
