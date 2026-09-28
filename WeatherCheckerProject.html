@@ -162,6 +162,7 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 </select>
 
 <button onclick="currentLocation()">📍 Current Location</button>
+<button onclick="configureApiKey()">⚙️ Key Settings</button>
 </div>
 
 <div id="weather"></div>
@@ -172,11 +173,25 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-// Add your WeatherAPI key below or enter it when prompted
+// Managed API Key storage and fallbacks
 const API_KEY="YOUR_API_KEY_HERE";
 
 function getApiKey(){
   return localStorage.getItem("weather_api_key") || API_KEY;
+}
+
+function configureApiKey(){
+  const currentKey = localStorage.getItem("weather_api_key") || "";
+  const userKey = prompt("Enter your WeatherAPI key (from weatherapi.com):", currentKey);
+  if(userKey !== null){
+    if(userKey.trim()){
+      localStorage.setItem("weather_api_key", userKey.trim());
+      alert("API Key saved successfully!");
+    } else {
+      localStorage.removeItem("weather_api_key");
+      alert("API Key cleared.");
+    }
+  }
 }
 
 const msgs=[
@@ -200,7 +215,7 @@ updateClock();
 setInterval(updateClock,1000);
 
 function escapeHtml(text){
-return text.replace(/[&<>'"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+return (text || "").replace(/[&<>'"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
 let selectedNoteColor='yellow';
@@ -228,6 +243,7 @@ list.innerHTML=notes.length?notes.map((note)=>`
     <button type="button" onclick="event.stopPropagation(); removeNote(${note.id});">Remove</button>
   </div>
   <div class="sticky-note-text" contenteditable="true" onblur="updateNote(${note.id}, this.innerText)">${escapeHtml(note.text)}</div>
+  ${note.createdAt ? `<small>Created: ${escapeHtml(note.createdAt)}</small>` : ''}
 </div>`).join("") : '';
 }
 
@@ -405,16 +421,21 @@ if(name==="Sauli") name="Savli";
 
 applyTheme(data.current.condition.text,data.current.is_day===1);
 
+const iconUrl = data.current.condition.icon ? (data.current.condition.icon.startsWith("//") ? "https:" + data.current.condition.icon : data.current.condition.icon) : "";
+const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="${escapeHtml(data.current.condition.text)}" style="vertical-align:middle;width:48px;height:48px;">` : "";
+
 document.getElementById("weather").innerHTML=`
 <div class="weather-box">
-  <h2>${name}</h2>
+  <h2>${escapeHtml(name)}</h2>
+  ${iconHtml}
   <h1>${data.current.temp_c}°C</h1>
+  <p style="font-weight:600;margin-bottom:8px;">${escapeHtml(data.current.condition.text)}</p>
   <button class="details-toggle" onclick="toggleDetails()">More Details</button>
   <div class="details-box" id="detailsBox">
-    <p>Condition: ${data.current.condition.text}</p>
+    <p>Condition: ${escapeHtml(data.current.condition.text)}</p>
     <p>Humidity: ${data.current.humidity}%</p>
     <p>Wind: ${data.current.wind_kph} km/h</p>
-    <p>Local Time: ${data.location.localtime}</p>
+    <p>Local Time: ${escapeHtml(data.location.localtime)}</p>
   </div>
 </div>
 `;
@@ -442,7 +463,7 @@ try {
   if(r.ok && data.location){
     render(data);
   } else {
-    document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${data.error?.message || "Failed to fetch weather data"}</p></div>`;
+    document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${escapeHtml(data.error?.message || "Failed to fetch weather data")}</p></div>`;
   }
 } catch (err) {
   document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">Network error. Please try again.</p></div>`;
@@ -472,7 +493,7 @@ navigator.geolocation.getCurrentPosition(async p=>{
     if(r.ok && data.location){
       render(data);
     } else {
-      document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${data.error?.message || "Failed to fetch weather data"}</p></div>`;
+      document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${escapeHtml(data.error?.message || "Failed to fetch weather data")}</p></div>`;
     }
   } catch (err) {
     document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">Network error. Please try again.</p></div>`;
