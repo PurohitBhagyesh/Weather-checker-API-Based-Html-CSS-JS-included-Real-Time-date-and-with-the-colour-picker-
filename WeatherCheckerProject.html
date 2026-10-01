@@ -16,8 +16,8 @@ body{margin:0;font-family:'Times New Roman',Times,serif;background:linear-gradie
 .card{width:100%;max-width:760px;background:rgba(255,255,255,.16);backdrop-filter:blur(14px);padding:24px;border-radius:24px;border:1px solid rgba(255,255,255,.28);box-shadow:0 14px 35px rgba(0,0,0,.16);position:relative}
 .card h3{font-weight:700;text-align:center;font-size:18px;margin:6px 0 4px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.18)}
 .controls{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px;margin:14px 0 18px}
-select,button{padding:10px 14px;border-radius:999px;border:none;margin:5px;font-family:'Times New Roman',Times,serif;font-weight:700;box-shadow:0 6px 14px rgba(0,0,0,.08)}
-select{min-width:180px;background:#fff}
+select,input[type="text"],button{padding:10px 14px;border-radius:999px;border:none;margin:5px;font-family:'Times New Roman',Times,serif;font-weight:700;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+select,input[type="text"]{min-width:180px;background:#fff;outline:none}
 button{background:linear-gradient(135deg,#ffffff,#f4f6ff);color:#2f3b4a;cursor:pointer;transition:transform .2s ease, box-shadow .2s ease}
 button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 #weather,#message{margin-top:20px;text-align:center}
@@ -78,7 +78,7 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
   .container{padding:12px}
   .card{padding:16px;border-radius:18px}
   .controls{flex-direction:column;align-items:stretch}
-  select,button{width:100%;margin:4px 0;min-width:0}
+  select,input[type="text"],button{width:100%;margin:4px 0;min-width:0}
   .weather-box{width:100%;max-width:100%}
   .weather-box h2{font-size:20px}
   .weather-box h1{font-size:24px}
@@ -106,7 +106,7 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 <div class="sticky-section">
   <div class="sticky-note-box">
     <p>Sticky Notes</p>
-    <textarea id="noteInput" placeholder="Take a quick note..."></textarea>
+    <textarea id="noteInput" placeholder="Take a quick note... (Press Enter to add)" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); saveNoteFromInput(); }"></textarea>
     <div class="color-picker-row">
       <button class="color-pill yellow active" type="button" onclick="setNoteColor('yellow')" title="Yellow"></button>
       <button class="color-pill pink" type="button" onclick="setNoteColor('pink')" title="Pink"></button>
@@ -130,10 +130,10 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
   </label>
 </div>
 
-<h3 style="font-size:18px;font-weight:700;margin:6px 0 4px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.18);">Choose Your Hometown Area</h3>
+<h3 style="font-size:18px;font-weight:700;margin:6px 0 4px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.18);">Choose Your Location</h3>
 
 <div class="controls">
-<select id="city" onchange="getWeather()">
+<select id="city" onchange="onCitySelectChange()">
 <option value="">Select Location</option>
 <option>Vadodara</option>
 <option>Ahmedabad</option>
@@ -161,6 +161,8 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}
 <option>Deesa</option>
 </select>
 
+<input type="text" id="customCity" placeholder="Or enter any city..." onkeydown="if(event.key==='Enter') getWeather()">
+<button onclick="getWeather()">🔍 Search</button>
 <button onclick="currentLocation()">📍 Current Location</button>
 <button onclick="configureApiKey()">⚙️ Key Settings</button>
 </div>
@@ -392,6 +394,9 @@ renderNotes();
 function changePageColor(value){
 document.body.style.background=value;
 document.body.style.setProperty("--accent", value);
+localStorage.setItem("weather_theme_color", value);
+const ringInput=document.getElementById("ringColor");
+if(ringInput) ringInput.value=value;
 }
 
 function toggleDetails(){
@@ -402,8 +407,10 @@ box.style.display=box.style.display==="block"?"none":"block";
 }
 
 function applyTheme(condition,isDay){
-condition=condition.toLowerCase();
+const savedTheme = localStorage.getItem("weather_theme_color");
+if(savedTheme) return;
 
+condition=condition.toLowerCase();
 if(!isDay){
 document.body.style.background="#0f172a";
 }else if(condition.includes("rain")){
@@ -443,8 +450,18 @@ document.getElementById("weather").innerHTML=`
 document.getElementById("message").innerHTML="<h3>"+randomMsg()+"</h3>";
 }
 
+function onCitySelectChange(){
+const select = document.getElementById("city");
+if(select.value){
+  document.getElementById("customCity").value = "";
+  getWeather();
+}
+}
+
 async function getWeather(){
-const city=document.getElementById("city").value;
+const citySelect = document.getElementById("city").value;
+const customCity = document.getElementById("customCity").value.trim();
+const city = customCity || citySelect;
 if(!city)return;
 const apiKey=getApiKey();
 if(!apiKey || apiKey==="YOUR_API_KEY_HERE"){
@@ -461,6 +478,7 @@ try {
   const r=await fetch(`https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(city)}`);
   const data=await r.json();
   if(r.ok && data.location){
+    localStorage.setItem("last_searched_city", city);
     render(data);
   } else {
     document.getElementById("weather").innerHTML=`<div class="weather-box"><p style="color:#e11d48;font-weight:bold;">${escapeHtml(data.error?.message || "Failed to fetch weather data")}</p></div>`;
@@ -501,6 +519,17 @@ navigator.geolocation.getCurrentPosition(async p=>{
 }, err => {
   alert("Unable to retrieve location: " + err.message);
 });
+}
+
+// Init local settings
+const savedTheme = localStorage.getItem("weather_theme_color");
+if(savedTheme){
+  changePageColor(savedTheme);
+}
+const lastCity = localStorage.getItem("last_searched_city");
+if(lastCity){
+  document.getElementById("customCity").value = lastCity;
+  getWeather();
 }
 
 renderNotes();
